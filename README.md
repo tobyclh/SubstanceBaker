@@ -1,7 +1,9 @@
 ##SubstanceBaker
+
 ####Unity plugin to bake substance aka procedural material into ordinary materials.
 
 ###Features
+
 Proper GUI - 
 Batch tools - edit multiple procedural materials at a time  
 Bake - Convert any procedural materials into ordinary material  
