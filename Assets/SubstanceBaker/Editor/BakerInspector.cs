@@ -5,7 +5,7 @@ using UnityEditor;
 namespace SubstanceBaker
 {
     public class BakerWindow : EditorWindow
-    { 
+    {
         public BakerProfile _profile;
         [MenuItem("Window/SubstanceBaker/Profiles")]
         public static void Init()
@@ -21,6 +21,15 @@ namespace SubstanceBaker
             {
                 Editor editor = Editor.CreateEditor(_profile);
                 editor.DrawDefaultInspector();
+                if (GUILayout.Button("Apply settings to selected materials"))
+                {
+                    Baker.ApplySettings(_profile);
+                }
+
+                if (GUILayout.Button("Start Baking selected materials"))
+                {
+                    Baker.BatchCovert(_profile);
+                }
             }
             if (GUILayout.Button("Create new profile"))
             {
@@ -44,15 +53,7 @@ namespace SubstanceBaker
 
             }
 
-            if (GUILayout.Button("Apply settings to selected materials"))
-            {
-                
-            }
 
-            if (GUILayout.Button("Start Baking selected materials"))
-            {
-
-            }
         }
 
     }
