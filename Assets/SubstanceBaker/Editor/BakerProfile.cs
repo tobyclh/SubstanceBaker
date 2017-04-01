@@ -22,7 +22,7 @@ namespace SubstanceBaker
         [TooltipAttribute("Shader for new material")]
         public Shader shader;
         [TooltipAttribute("Location to store extracted maps")]
-        public string materialFolder = "SubstanceBaker/Materials/";
+        public string materialFolder = "Assets/SubstanceBaker/Materials/";
         [TooltipAttribute("Remove procedural material after baking")]
         public bool removeSubstance = false;
         [TooltipAttribute("Generate all the maps included in the substances even if it is not used by the shader")]
@@ -31,6 +31,8 @@ namespace SubstanceBaker
 
         [TextAreaAttribute]
         public string shaderTextureName = "Fill in your shader's internal texture names, leave blank if inapplicable";
+        [TooltipAttribute("Remap alpha channel, https://docs.unity3d.com/ScriptReference/SubstanceImporter.ExportBitmaps.html")]
+        public bool remapAlpha = true;
         public string albedoName = "_MainTex";
         public string normalName = "";
         public string specularName = "";
