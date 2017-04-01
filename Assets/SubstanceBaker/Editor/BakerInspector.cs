@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.Assertions;
+using System.Linq;
 using UnityEngine;
 using UnityEditor;
 namespace SubstanceBaker
@@ -7,11 +9,12 @@ namespace SubstanceBaker
     public class BakerWindow : EditorWindow
     {
         public BakerProfile _profile;
-        [MenuItem("Window/SubstanceBaker/Profiles")]
+        [MenuItem("Window/SubstanceBaker/Main Panel")]
         public static void Init()
         {
             EditorWindow.GetWindow(typeof(BakerWindow)).Show();
         }
+
         void OnGUI()
         {
             GUILayout.Label("Profile", EditorStyles.boldLabel);
@@ -25,11 +28,11 @@ namespace SubstanceBaker
                 {
                     Baker.ApplySettings(_profile);
                 }
-
                 if (GUILayout.Button("Start Baking selected materials"))
                 {
                     Baker.BatchCovert(_profile);
                 }
+                EditorGUILayout.LabelField("Selected " + ProceduralMaterialCount() + " Procedural Materials");
             }
             if (GUILayout.Button("Create new profile"))
             {
