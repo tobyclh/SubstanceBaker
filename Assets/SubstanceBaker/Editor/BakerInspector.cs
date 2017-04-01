@@ -59,5 +59,32 @@ namespace SubstanceBaker
 
         }
 
+        [MenuItem("CONTEXT/ProceduralMaterial/Bake And Replace")]
+        private static void BakeAndReplace(MenuCommand menuCommand)
+        {
+            Assert.AreEqual(Selection.objects.Count(), 1, "Inplace baking supports only 1 material in a time");             
+            var bakerWin = EditorWindow.GetWindow(typeof(BakerWindow)) as BakerWindow;
+            var proceduralMat = menuCommand.context as ProceduralMaterial;
+            var material = Baker.Bake(bakerWin._profile, proceduralMat);
+            Selection.activeGameObject.GetComponent<Renderer>().material = material;
+        }
+
+        [MenuItem("CONTEXT/ProceduralMaterial/Bake Without Replace")]
+        private static void BakeNoReplace(MenuCommand menuCommand)
+        {
+            Assert.AreEqual(Selection.objects.Count(), 1, "Inplace baking supports only 1 material in a time"); 
+            var bakerWin = EditorWindow.GetWindow(typeof(BakerWindow)) as BakerWindow;
+            var material = Baker.Bake(bakerWin._profile, menuCommand.context as ProceduralMaterial);
+        }
+
+
+        private static int ProceduralMaterialCount()
+        {
+            return Selection.objects.Where(x => x is ProceduralMaterial || x is SubstanceArchive).Count();
+        }
+
+
+
+
     }
 }
