@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEditor;
 using UnityEngine.Assertions;
 using System;
@@ -10,8 +11,15 @@ using System.Linq;
 //Baker script that does the heavy lifting for you
 namespace SubstanceBaker
 {
-    public class Baker
+    public static class Baker
     {
+        public static bool isBaking = false;
+        public static UnityEvent<Material> OnFinishedBaking;
+        public static UnityEvent OnFinishedBatchBaking;
+        public static UnityEvent<Texture2D> OnTextureImported;
+        private static List<string> pendingTextures = new List<string>();
+        private static List<Texture2D> importedTexture = new List<Texture2D>();
+        private static bool areTexturesImported = false;
         public static void ApplySettings(BakerProfile profile)
         {
             var materials = GatherProceduralMaterials();
@@ -53,33 +61,36 @@ namespace SubstanceBaker
         public static void Bake(BakerProfile profile)
         {
             var materials = GatherProceduralMaterials();
-            for(int i = 0; i < materials.Count; i++)
+            for (int i = 0; i < materials.Count; i++)
             {
                 SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials[0]) as SubstanceImporter; // Get the substance importer to change the settings
-                var importerMats =substanceImporter.GetMaterials();
-                for(int j = 0; j < importerMats.Length; j++)
+                var importerMats = substanceImporter.GetMaterials();
+                for (int j = 0; j < importerMats.Length; j++)
                 {
                     //Bake 
-                    Resources.UnloadAsset(Bake(profile, importerMats[j], substanceImporter));
+                    Bake(profile, importerMats[j], substanceImporter);
                 }
             }
         }
 
-        public static Material Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial)
+        public static void Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial)
         {
-            return Bake(profile, proceduralMaterial, AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(proceduralMaterial)) as SubstanceImporter);
+            Bake(profile, proceduralMaterial, AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(proceduralMaterial)) as SubstanceImporter);
         }
 
-        public static Material Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial, SubstanceImporter substanceImporter)
+        public static IEnumerator Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial, SubstanceImporter substanceImporter)
         {
             var exportTo = UnityPath(Path.Combine(profile.materialFolder, proceduralMaterial.name)) + "/";
             substanceImporter.ExportBitmaps(proceduralMaterial, exportTo, profile.remapAlpha);
-            var textures = AssetDatabase.LoadAllAssetsAtPath(exportTo).Where(x => x is Texture2D).Cast<Texture2D>();
+            pendingTextures.AddRange(proceduralMaterial.GetGeneratedTextures().Select(x => x.name));
+            OnTextureImported.AddListener(RemoveTextureFromPending);
+            yield return new WaitUntil(()=> pendingTextures.Count == 0);
             Assert.AreNotEqual(textures.Count(), 0, "Cannot find any texture in folder");
             Assert.IsNotNull(profile.shader);
             Material mat = new Material(profile.shader);
             foreach (Texture tex in textures)
             {
+                
                 if (tex.name.Contains("ambient_occlusion"))
                 {
                     mat.SetTexture(profile.AOName, tex);
@@ -110,9 +121,22 @@ namespace SubstanceBaker
                 }
             }
             AssetDatabase.CreateAsset(mat, exportTo + proceduralMaterial.name + ".mat");
-            return mat;
+
         }
 
+        private static void RemoveTextureFromPending(Texture2D tex)
+        {
+            if(pendingTextures.Contains(tex.name))
+            {
+                pendingTextures.Remove(tex.name);
+                importedTexture.Add(tex);
+            }
+            if(pendingTextures.Count == 0)
+            {
+                OnTextureImported.RemoveListener(RemoveTextureFromPending);
+            }
+
+        }
         public static void BatchCovert(BakerProfile profile)
         {
             var materials = GatherProceduralMaterials();
