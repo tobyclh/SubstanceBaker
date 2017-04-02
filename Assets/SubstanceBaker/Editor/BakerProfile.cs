@@ -16,6 +16,7 @@ namespace SubstanceBaker
         public int TargetHeight = 0;
         public Format format = Format.Unchanged;
         public LoadingBehavior loadingBehaviour = LoadingBehavior.Unchanged;
+        public CustomValue[] CustomValues;
 
         [HeaderAttribute("Baking Settings")]
 
@@ -42,6 +43,7 @@ namespace SubstanceBaker
         public string AOName = "";
         public string heightName = "";
 
+        
         public enum Format
         {
             Compressed, Raw, Unchanged
@@ -53,5 +55,11 @@ namespace SubstanceBaker
 
     }
     
+    [System.Serializable]
+    public class CustomValue
+    {
+        public string Name;
+        public float value;
+    }
 
 }

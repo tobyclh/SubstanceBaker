@@ -14,22 +14,21 @@ namespace SubstanceBaker
     public static class Baker
     {
         public static bool isBaking = false;
-        public static UnityEvent<Material> OnFinishedBaking;
-        public static UnityEvent OnFinishedBatchBaking;
-        public static UnityEvent<Texture2D> OnTextureImported;
-        private static List<string> pendingTextures = new List<string>();
-        private static List<Texture2D> importedTexture = new List<Texture2D>();
-        private static bool areTexturesImported = false;
+
+        private static Dictionary<string, List<string>> pendingTextures = new Dictionary<string, List<string>>();
         public static void ApplySettings(BakerProfile profile)
         {
             var materials = GatherProceduralMaterials();
             for (int i = 0; i < materials.Count; i++)
             {
-                SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials[0]) as SubstanceImporter; // Get the substance importer to change the settings
+                SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials.ElementAt(i).Key) as SubstanceImporter; // Get the substance importer to change the settings
                 var proceduralMaterials = substanceImporter.GetMaterials();  //Get all the materials within that particular sbsar
                 foreach (ProceduralMaterial proceduralMaterial in proceduralMaterials)  //For each procedural material in the sbsar...
                 {
-                    ApplySettings(profile, proceduralMaterial, substanceImporter);
+                    if (materials.ElementAt(i).Value.Contains(proceduralMaterial.name))
+                    {
+                        ApplySettings(profile, proceduralMaterial, substanceImporter);
+                    }
                 }
                 Resources.UnloadUnusedAssets();
             }
@@ -48,10 +47,23 @@ namespace SubstanceBaker
             height = profile.TargetHeight == 0 ? height : profile.TargetHeight;
             format = profile.format == BakerProfile.Format.Unchanged ? format : (int)profile.format;
             loadbehaviour = profile.loadingBehaviour == BakerProfile.LoadingBehavior.Unchanged ? loadbehaviour : (int)profile.loadingBehaviour;
-
             Debug.Log("Applying Settings to " + proceduralMaterial.name); //Print the name of the material
+            foreach (var property in profile.CustomValues)
+            {
+                try
+                {
+                    if (proceduralMaterial.HasProceduralProperty(property.Name))
+                    {
+                        proceduralMaterial.SetProceduralFloat(property.Name, property.value);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                }
+            }
             substanceImporter.SetPlatformTextureSettings(proceduralMaterial, profile.platform, width, height, format, loadbehaviour);
-            substanceImporter.SetGenerateAllOutputs(proceduralMaterial, true);
+            substanceImporter.SetGenerateAllOutputs(proceduralMaterial, profile.generateAllMaps);
             substanceImporter.SaveAndReimport(); //Reimport under the new settings
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -60,214 +72,185 @@ namespace SubstanceBaker
 
         public static void Bake(BakerProfile profile)
         {
+            isBaking = true;
             var materials = GatherProceduralMaterials();
             for (int i = 0; i < materials.Count; i++)
             {
-                SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials[0]) as SubstanceImporter; // Get the substance importer to change the settings
-                var importerMats = substanceImporter.GetMaterials();
-                for (int j = 0; j < importerMats.Length; j++)
+                SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials.ElementAt(i).Key) as SubstanceImporter; // Get the substance importer to change the settings
+                var proceduralMaterials = substanceImporter.GetMaterials();  //Get all the materials within that particular sbsar
+                foreach (ProceduralMaterial proceduralMaterial in proceduralMaterials)  //For each procedural material in the sbsar...
                 {
-                    //Bake 
-                    Bake(profile, importerMats[j], substanceImporter);
+                    if (materials.ElementAt(i).Value.Contains(proceduralMaterial.name))
+                    {
+                        Bake(profile, proceduralMaterial, substanceImporter);
+                    }
                 }
+                Resources.UnloadUnusedAssets();
             }
         }
 
         public static void Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial)
         {
+            isBaking = true;
             Bake(profile, proceduralMaterial, AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(proceduralMaterial)) as SubstanceImporter);
         }
 
-        public static IEnumerator Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial, SubstanceImporter substanceImporter)
+        public static void Bake(BakerProfile profile, ProceduralMaterial proceduralMaterial, SubstanceImporter substanceImporter)
         {
+            isBaking = true;
             var exportTo = UnityPath(Path.Combine(profile.materialFolder, proceduralMaterial.name)) + "/";
+            Debug.Log("Baking : " + proceduralMaterial.name);
+            if (!pendingTextures.ContainsKey((proceduralMaterial.name)))
+            {
+                pendingTextures.Add(proceduralMaterial.name, proceduralMaterial.GetGeneratedTextures().Select(x => x.name).ToList<string>());
+                // foreach (var name in proceduralMaterial.GetGeneratedTextures().Select(x => x.name))
+                // {
+                //     Debug.Log("Name added to pendingTextures    " + name);
+                // }
+            }
+            if(profile.removeSubstance)
+            {
+                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(proceduralMaterial));
+            }
+            Debug.Log("Exporting");
             substanceImporter.ExportBitmaps(proceduralMaterial, exportTo, profile.remapAlpha);
-            pendingTextures.AddRange(proceduralMaterial.GetGeneratedTextures().Select(x => x.name));
-            OnTextureImported.AddListener(RemoveTextureFromPending);
-            yield return new WaitUntil(()=> pendingTextures.Count == 0);
-            Assert.AreNotEqual(textures.Count(), 0, "Cannot find any texture in folder");
+
+            Debug.Log("Exported");
+            AssetDatabase.Refresh();
+        }
+
+        private static Material CreateMaterialFromMaps(BakerProfile profile, string name)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
             Assert.IsNotNull(profile.shader);
             Material mat = new Material(profile.shader);
-            foreach (Texture tex in textures)
+            var path = UnityPath(Path.Combine(profile.materialFolder, name));
+            var mats = Baker.LoadAllAssetsAtPath<Texture>(path);
+            foreach (Texture2D tex in mats)
             {
-                
-                if (tex.name.Contains("ambient_occlusion"))
+                if (tex.name.ToLower().Contains("ambient_occlusion"))
                 {
                     mat.SetTexture(profile.AOName, tex);
                 }
-                else if (tex.name.Contains("basecolor"))
+                else if (tex.name.ToLower().Contains("basecolor") || tex.name.ToLower().Contains("diffuse"))
                 {
                     mat.SetTexture(profile.albedoName, tex);
                 }
-                else if (tex.name.Contains("roughness"))
+                else if (tex.name.ToLower().Contains("roughness"))
                 {
                     mat.SetTexture(profile.roughnessName, tex);
                 }
-                else if (tex.name.Contains("height"))
+                else if (tex.name.ToLower().Contains("height"))
                 {
                     mat.SetTexture(profile.heightName, tex);
                 }
-                else if (tex.name.Contains("normal"))
+                else if (tex.name.ToLower().Contains("normal"))
                 {
                     mat.SetTexture(profile.normalName, tex);
                 }
-                else if (tex.name.Contains("specular"))
+                else if (tex.name.ToLower().Contains("specular"))
                 {
                     mat.SetTexture(profile.specularName, tex);
                 }
-                else if (tex.name.Contains("glossiness"))
+                else if (tex.name.ToLower().Contains("glossiness"))
                 {
                     mat.SetTexture(profile.glossinessName, tex);
                 }
             }
-            AssetDatabase.CreateAsset(mat, exportTo + proceduralMaterial.name + ".mat");
-
+            AssetDatabase.CreateAsset(mat, path + "/" + name + ".mat");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Resources.UnloadUnusedAssets();
+            return mat;
         }
 
-        private static void RemoveTextureFromPending(Texture2D tex)
-        {
-            if(pendingTextures.Contains(tex.name))
-            {
-                pendingTextures.Remove(tex.name);
-                importedTexture.Add(tex);
-            }
-            if(pendingTextures.Count == 0)
-            {
-                OnTextureImported.RemoveListener(RemoveTextureFromPending);
-            }
 
-        }
-        public static void BatchCovert(BakerProfile profile)
+        public static void RemoveTextureFromPending(string texName)
         {
-            var materials = GatherProceduralMaterials();
-            for (int i = 0; i < materials.Count; i++)
+            string materialName;
+            for (int i = 0; i < pendingTextures.Count; i++)
             {
-                SubstanceImporter substanceImporter = AssetImporter.GetAtPath(materials[0]) as SubstanceImporter; // Get the substance importer to change the settings
-                var proceduralMaterials = substanceImporter.GetMaterials();  //Get all the materials within that particular sbsar
-                foreach (ProceduralMaterial proceduralMaterial in proceduralMaterials)  //For each procedural material in the sbsar...
+                if (pendingTextures.ElementAt(i).Value.Contains(texName))
                 {
-                    int width, height, format, loadbehaviour;
-                    substanceImporter.GetPlatformTextureSettings(substanceImporter.name, profile.platform, out width, out height, out format, out loadbehaviour);
-                    width = profile.TargetWidth == 0 ? width : profile.TargetWidth;
-                    height = profile.TargetHeight == 0 ? height : profile.TargetHeight;
-                    format = profile.format == BakerProfile.Format.Unchanged ? format : (int)profile.format;
-                    loadbehaviour = profile.loadingBehaviour == BakerProfile.LoadingBehavior.Unchanged ? loadbehaviour : (int)profile.loadingBehaviour;
-
-                    Debug.Log("Processing : " + proceduralMaterial.name); //Print the name of the material
-                    substanceImporter.SetPlatformTextureSettings(proceduralMaterial, profile.platform, width, height, format, loadbehaviour);
-                    substanceImporter.SetGenerateAllOutputs(proceduralMaterial, true);
-                    substanceImporter.SaveAndReimport(); //Reimport under the new settings
-                    substanceImporter.ExportBitmaps(proceduralMaterial, profile.materialFolder.EndsWith("/") ? profile.materialFolder : profile.materialFolder + "/" + proceduralMaterial.name + "/", false);
-                    AssetDatabase.SaveAssets();
-                    AssetDatabase.Refresh();
+                    materialName = pendingTextures.ElementAt(i).Key;
+                    Debug.Log("RemoveTextureFromPending : " + texName);
+                    pendingTextures.ElementAt(i).Value.Remove(texName);
+                    if (pendingTextures.ElementAt(i).Value.Count == 0)
+                    {
+                        Debug.Log("CreateMaterialFromMaps " + materialName);
+                        var window = EditorWindow.GetWindow(typeof(BakerWindow)) as BakerWindow;
+                        EditorApplication.delayCall += (() => CreateMaterialFromMaps(window._profile, materialName));
+                    }
                 }
-                Resources.UnloadUnusedAssets();
             }
-
         }
 
-        public static List<string> GatherProceduralMaterials()
+
+
+
+        public static Dictionary<string, List<string>> GatherProceduralMaterials()
         {
-            List<string> materials = new List<string>();
+            Dictionary<string, List<string>> materials = new Dictionary<string, List<string>>();
 
             //search for materials
             foreach (var obj in Selection.objects)
             {
                 string path = AssetDatabase.GetAssetPath(obj);
-
-                if (AssetDatabase.IsValidFolder(path))
+                if (obj is ProceduralMaterial)
                 {
-                    string[] filepaths = Directory.GetFiles(Path.GetDirectoryName(Application.dataPath) + "/" + path, "*.sbsar", SearchOption.AllDirectories);
-                    foreach (string file in filepaths)
+                    if (!materials.Keys.Contains(path))
                     {
-                        //Convert path string to relative
-                        string filePath = GetRightPartOfPath(UnityPath(file), "Assets");
-                        if (!materials.Contains(filePath))
+                        materials.Add(path, new List<string>() { obj.name });
+                    }
+                    else
+                    {
+                        if (!materials[path].Contains(obj.name))
                         {
-                            materials.Add(filePath);
+                            materials[path].Add(obj.name);
                         }
                     }
                 }
-                else
+                else if (obj is SubstanceArchive)
                 {
-                    if (path.EndsWith(".sbsar"))
+                    SubstanceImporter substanceImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(obj)) as SubstanceImporter; // Get the substance importer to change the settings
+                    var importerMats = substanceImporter.GetMaterials();
+                    foreach (var mat in importerMats)
                     {
-                        if (!materials.Contains(path))
+                        if (!materials.Keys.Contains(path))
                         {
-                            materials.Add(path);
+                            materials.Add(path, new List<string>() { mat.name });
+                        }
+                        else
+                        {
+                            if (!materials[path].Contains(mat.name))
+                            {
+                                materials[path].Add(mat.name);
+                            }
                         }
 
                     }
+
                 }
+
             }
-            int count = materials.Count;
-            Debug.Log("Substance Baker : Found " + count.ToString() + " materials");
+            Debug.Log("Substance Baker : Found " + materials.Count.ToString() + " materials");
             return materials;
         }
 
-
-        private static void CreateMaterialFromMaps(BakerProfile profile)
+        public static bool IsWaitingFor(string name)
         {
-            foreach (var obj in Selection.objects)
+            var textures = pendingTextures.Where(x => x.Value.Contains(name));
+            if (textures.Count() > 0)
             {
-                string path = AssetDatabase.GetAssetPath(obj);
-                if (!AssetDatabase.IsValidFolder(path))
-                {
-                    Debug.LogError("All maps must be contained within a folder, Skipping");
-                    continue;
-                }
-                string[] filepaths = Directory.GetFiles(Path.GetDirectoryName(Application.dataPath) + "/" + path, "*.*", SearchOption.AllDirectories);
-                //Debug.Log("Files Count : " + Path.GetDirectoryName(Application.dataPath) + "/" + path + filepaths.Count());
-                List<Texture> textures = new List<Texture>();
-                foreach (string file in filepaths)
-                {
-                    string fileName = file.Replace('\\', '/');
-                    var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(GetRightPartOfPath(fileName, "Assets"));
-                    if (tex != null)
-                        textures.Add(tex);
-                }
-                Assert.AreNotEqual(textures.Count(), 0, "Cannot find any texture in folder");
-                Assert.IsNotNull(profile.shader);
-                Material mat = new Material(profile.shader);
-
-                foreach (Texture tex in textures)
-                {
-                    if (tex.name.Contains("ambient_occlusion"))
-                    {
-                        mat.SetTexture("_AmbientOcclusion", tex);
-                    }
-                    else if (tex.name.Contains("basecolor"))
-                    {
-                        mat.SetTexture("_MainTex", tex);
-                    }
-                    else if (tex.name.Contains("roughness"))
-                    {
-                        mat.SetTexture("_Roughness", tex);
-                    }
-                    else if (tex.name.Contains("height"))
-                    {
-                        mat.SetTexture("_DisplacementMap", tex);
-                    }
-                    else if (tex.name.Contains("normal"))
-                    {
-                        mat.SetTexture("_BumpMap", tex);
-                    }
-                    else if (tex.name.Contains("specular"))
-                    {
-                        mat.SetTexture("_Specular", tex);
-                    }
-                    else if (tex.name.Contains("glossiness"))
-                    {
-                        mat.SetTexture("_Cavity", tex);
-                    }
-                }
-
-                AssetDatabase.CreateAsset(mat, path + "/" + path + ".mat");
+                return true;
             }
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-        }
+            else
+            {
+                return false;
+            }
 
+        }
 
         private static string GetRightPartOfPath(string path, string after)
         {
@@ -289,5 +272,31 @@ namespace SubstanceBaker
             return OSPath.Replace('\\', '/');
         }
 
+        private static T[] LoadAllAssetsAtPath<T>(string path) where T : UnityEngine.Object
+        {
+            if (path == "")
+            {
+                Debug.LogError("Selecting the asset directory is not allowed");
+                return null;
+            }
+            if (!AssetDatabase.IsValidFolder(path))
+            {
+                Debug.LogError("Invalid folder");
+                return null;
+            }
+            string[] filepaths = Directory.GetFiles(Path.GetDirectoryName(Application.dataPath) + "/" + path, "*.*", SearchOption.AllDirectories);
+            Debug.Log("Files Count : " + Path.GetDirectoryName(Application.dataPath) + "/" + path + " " + filepaths.Count());
+            List<T> objs = new List<T>();
+            foreach (string file in filepaths)
+            {
+                Debug.Log("File : " + file);
+                string fileName = file.Replace('\\', '/');
+                T obj = AssetDatabase.LoadAssetAtPath<T>(GetRightPartOfPath(fileName, "Assets"));
+                if (obj != null)
+                    objs.Add(obj);
+            }
+            return objs.ToArray<T>();
+
+        }
     }
 }

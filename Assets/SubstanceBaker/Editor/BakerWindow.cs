@@ -9,6 +9,8 @@ namespace SubstanceBaker
     public class BakerWindow : EditorWindow
     {
         public BakerProfile _profile;
+        [HideInInspector]
+
         [MenuItem("Window/SubstanceBaker/Main Panel")]
         public static void Init()
         {
@@ -30,7 +32,7 @@ namespace SubstanceBaker
                 }
                 if (GUILayout.Button("Start Baking selected materials"))
                 {
-                    Baker.BatchCovert(_profile);
+                    Baker.Bake(_profile);
                 }
                 EditorGUILayout.LabelField("Selected " + ProceduralMaterialCount() + " Procedural Materials");
             }
@@ -62,11 +64,10 @@ namespace SubstanceBaker
         [MenuItem("CONTEXT/ProceduralMaterial/Bake And Replace")]
         private static void BakeAndReplace(MenuCommand menuCommand)
         {
-            Assert.AreEqual(Selection.objects.Count(), 1, "Inplace baking supports only 1 material in a time");
+            Assert.AreEqual(Selection.objects.Count(), 1, "Select 1 Gameobject");
             var bakerWin = EditorWindow.GetWindow(typeof(BakerWindow)) as BakerWindow;
             var proceduralMat = menuCommand.context as ProceduralMaterial;
             Baker.Bake(bakerWin._profile, proceduralMat);
-                        
         }
 
         [MenuItem("CONTEXT/ProceduralMaterial/Bake Without Replace")]
