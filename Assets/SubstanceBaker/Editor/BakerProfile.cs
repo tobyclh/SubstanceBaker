@@ -16,7 +16,7 @@ namespace SubstanceBaker
         public int TargetHeight = 0;
         public Format format = Format.Unchanged;
         public LoadingBehavior loadingBehaviour = LoadingBehavior.Unchanged;
-        public CustomValue[] CustomValues;
+        public CustomFloat[] customFloat;
 
         [HeaderAttribute("Baking Settings")]
 
@@ -42,8 +42,8 @@ namespace SubstanceBaker
         public string metallicName = "";
         public string AOName = "";
         public string heightName = "";
+        public FieldMapper[] AdditionFields;
 
-        
         public enum Format
         {
             Compressed, Raw, Unchanged
@@ -54,12 +54,24 @@ namespace SubstanceBaker
         }
 
     }
-    
+
     [System.Serializable]
-    public class CustomValue
+    public class CustomFloat
     {
         public string Name;
         public float value;
     }
+    [System.Serializable]
+    public class FieldMapper
+    {
+        public MappableFields FieldType;
+        public string From;
+        public string To;
 
+    }
+
+    public enum MappableFields
+    {
+        Float, Color, Texture2D
+    }
 }

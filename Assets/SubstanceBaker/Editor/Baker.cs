@@ -48,7 +48,7 @@ namespace SubstanceBaker
             format = profile.format == BakerProfile.Format.Unchanged ? format : (int)profile.format;
             loadbehaviour = profile.loadingBehaviour == BakerProfile.LoadingBehavior.Unchanged ? loadbehaviour : (int)profile.loadingBehaviour;
             Debug.Log("Applying Settings to " + proceduralMaterial.name); //Print the name of the material
-            foreach (var property in profile.CustomValues)
+            foreach (var property in profile.customFloat)
             {
                 try
                 {

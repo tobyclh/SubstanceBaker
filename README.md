@@ -1,7 +1,8 @@
-# SubstanceBaker
-#### Unity plugin to bake substance aka procedural material into ordinary materials.
-Got sick of the poorly documented if not broken API for procedural material?  
-Simply don't want to mess with it?  
+# Substance Baker
+#### Plugin to bake substance aka procedural material into ordinary materials.
+Want to batch edit substances?  
+Get confused and frustrated by the long API and settings documents?
+Want to keep the parameter settings just to yourself?
 We heard you.
 
 
