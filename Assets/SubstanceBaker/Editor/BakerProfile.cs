@@ -72,6 +72,6 @@ namespace SubstanceBaker
 
     public enum MappableFields
     {
-        Float, Color, Texture2D
+        Float, Color, Texture, Int
     }
 }
