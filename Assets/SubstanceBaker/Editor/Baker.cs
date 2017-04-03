@@ -16,6 +16,7 @@ namespace SubstanceBaker
         public static bool isBaking = false;
 
         private static Dictionary<string, List<string>> pendingTextures = new Dictionary<string, List<string>>();
+        private static Dictionary<string, ProceduralMaterial> bakingMaterials = new Dictionary<string, ProceduralMaterial>();
         public static void ApplySettings(BakerProfile profile)
         {
             var materials = GatherProceduralMaterials();
@@ -103,15 +104,13 @@ namespace SubstanceBaker
             if (!pendingTextures.ContainsKey((proceduralMaterial.name)))
             {
                 pendingTextures.Add(proceduralMaterial.name, proceduralMaterial.GetGeneratedTextures().Select(x => x.name).ToList<string>());
+                bakingMaterials.Add(proceduralMaterial.name, proceduralMaterial);
                 // foreach (var name in proceduralMaterial.GetGeneratedTextures().Select(x => x.name))
                 // {
                 //     Debug.Log("Name added to pendingTextures    " + name);
                 // }
             }
-            if(profile.removeSubstance)
-            {
-                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(proceduralMaterial));
-            }
+
             Debug.Log("Exporting");
             substanceImporter.ExportBitmaps(proceduralMaterial, exportTo, profile.remapAlpha);
 
@@ -124,7 +123,53 @@ namespace SubstanceBaker
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Assert.IsNotNull(profile.shader);
-            Material mat = new Material(profile.shader);
+            ProceduralMaterial pm = bakingMaterials[name];
+            bakingMaterials.Remove(name);
+            Material mat;
+            if (profile.shader != pm.shader)
+            {
+                mat = new Material(profile.shader);
+                foreach (var field in profile.AdditionFields)
+                {
+                    try
+                    {
+                        switch (field.FieldType)
+                        {
+                            case (MappableFields.Color):
+                                {
+                                    mat.SetColor(field.To, pm.GetColor(field.From));
+                                    break;
+                                }
+                            case (MappableFields.Float):
+                                {
+                                    mat.SetFloat(field.To, pm.GetFloat(field.From));
+                                    break;
+                                }
+                            case (MappableFields.Texture):
+                                {
+                                    mat.SetTexture(field.To, pm.GetTexture(field.From));
+                                    break;
+                                }
+                            case (MappableFields.Int):
+                                {
+                                    mat.SetInt(field.To, pm.GetInt(field.From));
+                                    break;
+                                }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("Additional fields " + field.From + " fialed to set, Skipping field.");
+                        Debug.LogException(e);
+                        continue;
+                    }
+                }
+
+            }
+            else
+            {
+                mat = new Material(pm);
+            }
             var path = UnityPath(Path.Combine(profile.materialFolder, name));
             var mats = Baker.LoadAllAssetsAtPath<Texture>(path);
             foreach (Texture2D tex in mats)
@@ -158,7 +203,14 @@ namespace SubstanceBaker
                     mat.SetTexture(profile.glossinessName, tex);
                 }
             }
+            if (profile.removeSubstance)
+            {
+                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(pm));
+
+            }
             AssetDatabase.CreateAsset(mat, path + "/" + name + ".mat");
+            Material mat2 = new Material(pm);
+            AssetDatabase.CreateAsset(mat2, path + "/" + name + "2.mat");
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Resources.UnloadUnusedAssets();
