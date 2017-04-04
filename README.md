@@ -1,4 +1,4 @@
-# Substance Baker
+Substance Baker
 #### Plugin to bake substance aka procedural material into ordinary materials.
 Batch edit substances?  
 Get confused and frustrated by all the API settings documents?
@@ -27,13 +27,24 @@ User manual - You will be fine without one, but just in case
 - Bumped Specular profile - Achieve identical look for Substance Database material, but doesn't work with other PBR workflow.
 - Standard profile - Some settings will be lost, but works nicely with the rest of the lighting system
 #####   using Substance Source?
-- Standard profile -  
+- Standard profile
 3. Drop the prefered profile to the main panel
 4. Select substance(s)
 5. Apply settings if required
 6. Happy Baking
 
 
-### More on main panel
+### More about main panel
 #### Apply Settings
-##### Apply settings in 
+Apply all settings found iin "Substance Settings" section
+- Change platform settings, resolution etc on screen, no coding needed.  
+- Adjust common fields in multiple procedural material 
+
+#### Baking  
+Create a new material independent to the procedural material (e.g. not affected by the procedural material anymore)  
+-  Shader : Which shader for the material
+-  Material folder : Where to save the generated material
+-  Remove Substance : Delete the procedural material from Unity Project
+-  Generate All Maps : Generate all maps that the procedural material has, take up more space but could possibly create high quality material
+-  Remap Alpha : Remap Alpha channel to fit some shader (e.g. standard shader), See detail [https://Unitything]
+- Map Names : 
